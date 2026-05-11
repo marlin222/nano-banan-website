@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gondwana2Go — Built for the Wild</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sand:    #d4a96a;
+      --rust:    #b85c2c;
+      --dark:    #0e0c0a;
+      --mid:     #1c1610;
+      --light:   #f5efe6;
+      --accent:  #e07b39;
+    }
+
+    html { scroll-behavior: auto; }
+
+    body {
+      background: linear-gradient(160deg, #0a0806 0%, #0e0c0a 35%, #12100d 65%, #070504 100%);
+      min-height: 100vh;
+      color: var(--light);
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── Fixed canvas layer ── */
+    #canvas-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    #canvas-wrap canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Vignette gradient overlay */
+    #canvas-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        /* left reading panel — dark → transparent so text is legible */
+        linear-gradient(to right,
+          rgba(8,6,4,.97)   0%,
+          rgba(8,6,4,.88)  22%,
+          rgba(8,6,4,.50)  42%,
+          rgba(8,6,4,.10)  58%,
+          transparent      72%),
+        /* top & bottom edge fade */
+        linear-gradient(to bottom,
+          rgba(14,12,10,.40)  0%,
+          transparent        16%,
+          transparent        76%,
+          rgba(14,12,10,.80) 100%);
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      will-change: transform;
+    }
+
+    /* ── Scroll spacer ── */
+    #scroller {
+      position: relative;
+      z-index: 1;
+      /* 700vh = 500vh × 1.4 — 40% slower scroll pace */
+      height: 700vh;
+    }
+
+    /* ── Hero section (sticky at top) ── */
+    #hero {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      pointer-events: none;
+      text-align: left;
+      padding: 2rem 2rem 2rem clamp(2rem, 8vw, 7rem);
+      z-index: 2;
+    }
+
+    .eyebrow {
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      font-size: clamp(.65rem, 1.2vw, .85rem);
+      color: var(--sand);
+      opacity: 0;
+      transform: translateY(12px);
+      animation: fadeUp .9s .2s ease forwards;
+    }
+
+    h1 {
+      margin-top: .75rem;
+      font-size: clamp(2.4rem, 7vw, 6rem);
+      font-weight: 800;
+      line-height: 1.04;
+      letter-spacing: -.02em;
+      color: var(--light);
+      opacity: 0;
+      transform: translateY(18px);
+      animation: fadeUp .9s .45s ease forwards;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .sub {
+      margin-top: 1.4rem;
+      max-width: 38ch;
+      font-size: clamp(.9rem, 1.8vw, 1.15rem);
+      line-height: 1.6;
+      color: rgba(245,239,230,.6);
+      opacity: 0;
+      transform: translateY(14px);
+      animation: fadeUp .9s .7s ease forwards;
+    }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .5rem;
+      opacity: 0;
+      animation: fadeUp .9s 1.2s ease forwards;
+    }
+
+    .scroll-hint span {
+      font-size: .7rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: rgba(245,239,230,.45);
+    }
+
+    .scroll-arrow {
+      width: 22px;
+      height: 22px;
+      border-right: 2px solid var(--sand);
+      border-bottom: 2px solid var(--sand);
+      transform: rotate(45deg);
+      animation: bounce 1.6s 1.5s ease-in-out infinite;
+    }
+
+    /* ── Progress bar ── */
+    #progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      width: 0%;
+      background: linear-gradient(90deg, var(--rust), var(--sand));
+      z-index: 10;
+      transition: width .08s linear;
+      box-shadow: 0 0 8px rgba(176,88,44,.6);
+    }
+
+    /* ── Feature pills (fade in mid-scroll) ── */
+    #features {
+      position: fixed;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      z-index: 5;
+      opacity: 0;
+      transition: opacity .5s;
+      pointer-events: none;
+      padding: 0 1rem;
+    }
+
+    #features.visible { opacity: 1; }
+
+    .pill {
+      padding: .45rem 1.1rem;
+      border: 1px solid rgba(212,169,106,.35);
+      border-radius: 999px;
+      font-size: .72rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--sand);
+      background: rgba(14,12,10,.55);
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+    }
+
+    /* ── End section ── */
+    #end-section {
+      position: relative;
+      z-index: 3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 4rem 2rem;
+      background: linear-gradient(to bottom, transparent, var(--dark) 12%);
+    }
+
+    #end-section h2 {
+      font-size: clamp(1.8rem, 5vw, 3.8rem);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      color: var(--light);
+    }
+
+    #end-section h2 span { color: var(--accent); }
+
+    #end-section p {
+      margin-top: 1.2rem;
+      max-width: 42ch;
+      font-size: clamp(.9rem, 1.7vw, 1.1rem);
+      line-height: 1.65;
+      color: rgba(245,239,230,.55);
+    }
+
+    .cta-btn {
+      margin-top: 2.4rem;
+      display: inline-block;
+      padding: .9rem 2.4rem;
+      background: var(--accent);
+      color: #fff;
+      font-size: .9rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: background .2s, transform .15s;
+      pointer-events: auto;
+    }
+
+    .cta-btn:hover {
+      background: var(--rust);
+      transform: translateY(-2px);
+    }
+
+    /* ── Keyframes ── */
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: rotate(45deg) translateY(0); }
+      50%       { transform: rotate(45deg) translateY(6px); }
+    }
+
+    /* ── Loader overlay ── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: linear-gradient(160deg, #0a0806 0%, #0e0c0a 50%, #070504 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.4rem;
+      transition: opacity .6s ease;
+    }
+
+    #loader.hidden { opacity: 0; pointer-events: none; }
+
+    .loader-ring {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(212,169,106,.2);
+      border-top-color: var(--sand);
+      border-radius: 50%;
+      animation: spin .9s linear infinite;
+    }
+
+    #loader p {
+      font-size: .75rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: rgba(245,239,230,.4);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- Loader -->
+<div id="loader">
+  <div class="loader-ring"></div>
+  <p>Loading</p>
+</div>
+
+<!-- Progress bar -->
+<div id="progress-bar"></div>
+
+<!-- Three.js canvas -->
+<div id="canvas-wrap"></div>
+
+<!-- Feature pills -->
+<div id="features">
+  <div class="pill">ARB Bull Bar</div>
+  <div class="pill">Warn Winch</div>
+  <div class="pill">Roof-top Tent</div>
+  <div class="pill">Suspension Upgrade</div>
+  <div class="pill">Recovery Kit</div>
+  <div class="pill">Gondwana Canopy</div>
+</div>
+
+<!-- Scroll driver -->
+<div id="scroller">
+  <section id="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Gondwana 2 Go — Namibia</p>
+      <h1>Built<br/>for the <span>Wild.</span></h1>
+      <p class="sub">Every component engineered for Africa's most demanding terrain. Scroll to explore the build.</p>
+    </div><!-- /.hero-inner -->
+    <div class="scroll-hint">
+      <span>Scroll</span>
+      <div class="scroll-arrow"></div>
+    </div>
+  </section>
+</div>
+
+<!-- End CTA -->
+<section id="end-section">
+  <h2>Your <span>Adventure</span><br/>Starts Here.</h2>
+  <p>Fully equipped Toyota Hilux 4x4s, ready for self-drive expeditions across Namibia and beyond.</p>
+  <a class="cta-btn" href="#">Book Your Expedition</a>
+</section>
+
+<!-- Hidden video element -->
+<video
+  id="drive-video"
+  src="1778538025469_bqhjmoxivts.mp4"
+  muted
+  playsinline
+  preload="auto"
+  style="display:none"
+></video>
+
+<!-- Three.js r158 from CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const wrap        = document.getElementById('canvas-wrap');
+const video       = document.getElementById('drive-video');
+const loader      = document.getElementById('loader');
+const progressBar = document.getElementById('progress-bar');
+const features    = document.getElementById('features');
+const scroller    = document.getElementById('scroller');
+
+// ── Three.js setup ────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+wrap.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+camera.position.z = 1;
+
+// VideoTexture
+const videoTexture = new THREE.VideoTexture(video);
+videoTexture.colorSpace = THREE.SRGBColorSpace;
+videoTexture.minFilter  = THREE.LinearFilter;
+videoTexture.magFilter  = THREE.LinearFilter;
+
+// Full-screen plane — we scale UVs to maintain video aspect ratio
+const geo      = new THREE.PlaneGeometry(2, 2);
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    uVideo:  { value: videoTexture },
+    uAspect: { value: new THREE.Vector2(1, 1) }, // video / viewport ratio
+    uVig:    { value: 0.0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D uVideo;
+    uniform vec2      uAspect;
+    uniform float     uVig;
+    varying vec2 vUv;
+
+    void main() {
+      // Cover-fit UVs: keep video centred & cover the viewport
+      vec2 uv = (vUv - 0.5) * uAspect + 0.5;
+
+      // Clamp so no magenta border
+      uv = clamp(uv, 0.0, 1.0);
+
+      vec4 col = texture2D(uVideo, uv);
+
+      // Subtle vignette
+      float d   = length((vUv - 0.5) * 2.0);
+      float vig = 1.0 - smoothstep(0.5, 1.6, d) * 0.55;
+      col.rgb   *= vig;
+
+      gl_FragColor = col;
+    }
+  `,
+});
+
+scene.add(new THREE.Mesh(geo, material));
+
+// ── Aspect-ratio helper ───────────────────────────────────────────────────
+function updateAspect() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const viewportAspect = vw / vh;
+  const videoAspect    = video.videoWidth  && video.videoHeight
+    ? video.videoWidth / video.videoHeight
+    : 16 / 9;
+
+  if (viewportAspect > videoAspect) {
+    // viewport is wider — fit width, crop height
+    material.uniforms.uAspect.value.set(1, viewportAspect / videoAspect);
+  } else {
+    // viewport is taller — fit height, crop width
+    material.uniforms.uAspect.value.set(videoAspect / viewportAspect, 1);
+  }
+}
+
+// ── Resize ────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  updateAspect();
+});
+
+// ── Scroll → video time ───────────────────────────────────────────────────
+let targetTime  = 0;
+let currentTime = 0;
+const LERP      = 0.12; // smoothing factor (0=instant, 1=never)
+
+const heroInner = document.querySelector('.hero-inner');
+
+function onScroll() {
+  const scrollTop = window.scrollY;
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+  const progress  = Math.max(0, Math.min(1, scrollTop / maxScroll));
+
+  // Progress bar
+  progressBar.style.width = (progress * 100) + '%';
+
+  // Map scroll to video time
+  if (video.duration) {
+    targetTime = progress * video.duration;
+  }
+
+  // Subtle parallax: headline drifts up at 10% of scroll speed
+  // Capped so it doesn't leave the viewport too early
+  const parallaxY = Math.max(-window.innerHeight * 0.28, -scrollTop * 0.10);
+  heroInner.style.transform = `translateY(${parallaxY}px)`;
+
+  // Feature pills appear mid-scroll
+  if (progress > 0.15 && progress < 0.88) {
+    features.classList.add('visible');
+  } else {
+    features.classList.remove('visible');
+  }
+}
+
+window.addEventListener('scroll', onScroll, { passive: true });
+
+// ── Render loop ───────────────────────────────────────────────────────────
+let lastSeek = -1;
+
+function tick() {
+  requestAnimationFrame(tick);
+
+  // Lerp currentTime toward targetTime for smooth scrubbing
+  currentTime += (targetTime - currentTime) * LERP;
+
+  // Only seek when meaningfully different (avoids thrashing the decoder)
+  if (Math.abs(currentTime - lastSeek) > 0.015 && video.duration) {
+    video.currentTime = currentTime;
+    lastSeek = currentTime;
+  }
+
+  videoTexture.needsUpdate = true;
+  renderer.render(scene, camera);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+video.addEventListener('loadedmetadata', () => {
+  updateAspect();
+  video.currentTime = 0;
+  // Give the browser a moment to decode the first frame
+  setTimeout(() => {
+    loader.classList.add('hidden');
+    tick();
+  }, 300);
+});
+
+// Fallback: if already loaded (cached)
+if (video.readyState >= 2) {
+  updateAspect();
+  loader.classList.add('hidden');
+  tick();
+}
+
+video.addEventListener('error', (e) => {
+  console.error('Video load error', e);
+  loader.querySelector('p').textContent = 'Video not found';
+});
+</script>
+
+</body>
+</html>
