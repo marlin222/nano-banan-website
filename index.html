@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gondwana2Go — Built for the Wild</title>
+  <title>Namibia2Go — Built for the Wild</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -325,7 +325,7 @@
 <div id="scroller">
   <section id="hero">
     <div class="hero-inner">
-      <p class="eyebrow">Gondwana 2 Go — Namibia</p>
+      <p class="eyebrow">Namibia 2 Go — Gondwana</p>
       <h1>Built<br/>for the <span>Wild.</span></h1>
       <p class="sub">Every component engineered for Africa's most demanding terrain. Scroll to explore the build.</p>
     </div><!-- /.hero-inner -->
@@ -511,22 +511,33 @@ function tick() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
-video.addEventListener('loadedmetadata', () => {
+let started = false;
+function startPlayback() {
+  if (started) return;
+  started = true;
   updateAspect();
   video.currentTime = 0;
-  // Give the browser a moment to decode the first frame
   setTimeout(() => {
     loader.classList.add('hidden');
     tick();
   }, 300);
-});
+}
+
+video.addEventListener('loadedmetadata', startPlayback);
 
 // Fallback: if already loaded (cached)
 if (video.readyState >= 2) {
-  updateAspect();
-  loader.classList.add('hidden');
-  tick();
+  startPlayback();
 }
+
+// Fallback: hide loader after 5 s if video never fires loadedmetadata (e.g. file://)
+setTimeout(() => {
+  if (!started) {
+    started = true;
+    loader.classList.add('hidden');
+    tick();
+  }
+}, 5000);
 
 video.addEventListener('error', (e) => {
   console.error('Video load error', e);
